@@ -11,12 +11,12 @@ import torch.nn.functional as F
 query, key, value  (batch, len=H*W, n_head, d_model / n_head)
 pos (batch, H*W, n_head, k)
 '''
-
-batch = 160
-len = 20000
+# 完全注意力batch可以设到160，目前的pytorch实现只能设置到8，这与相差topk倍内存貌似一致
+batch = 8
+len = 1000
 n_head = 8
 d_model = 256
-topk = 20
+topk = 40
 
 # batch = 1
 # len = 2
@@ -37,36 +37,47 @@ pos = torch.randint(0, len, size=(batch, len, n_head, topk), device=device)
 '''
 尝试完全注意力区域
 '''
-start = time.time()
-out = F.scaled_dot_product_attention(query, key, value)
-end = time.time()
-print('FullAttention Running time  : %s Seconds'%(end-start))
+# start = time.time()
+# out = F.scaled_dot_product_attention(query, key, value)
+# end = time.time()
+# print('FullAttention Running time  : %s Seconds'%(end-start))
 '''
 尝试完全注意力区域
 '''
 
-# start1 = time.time()
-# out1 = MyAttention1.apply(query, key, value, pos)
-# # print(out1.shape)
-# torch.cuda.synchronize()
-# end1 = time.time()
-# print('test 1 run ok')
+start1 = time.time()
+out1 = MyAttention1.apply(query, key, value, pos)
+# print(out1.shape)
+torch.cuda.synchronize()
+end1 = time.time()
+print('test 1 run ok')
 
 # time.sleep(10)
 
-# start2 = time.time()
-# out2 = MyAttention2.apply(query, key, value, pos)
-# # print(out2.shape)
-# torch.cuda.synchronize()
-# end2 = time.time()
-# print('test 2 run ok')
-
-# assert np.quantile(torch.abs(out1 - out2).cpu(), 0.99) < 5e-5
-# print("check ok!")
+start2 = time.time()
+out2 = MyAttention2.apply(query, key, value, pos)
+# print(out2.shape)
+torch.cuda.synchronize()
+end2 = time.time()
+print('test 2 run ok')
 
 
-# print('Running time 1 : %s Seconds'%(end1-start1))
-# print('Running time 2 : %s Seconds'%(end2-start2))
+start3 = time.time()
+out3 = MyAttention3.apply(query, key, value, pos)
+# print(out3.shape)
+torch.cuda.synchronize()
+end3 = time.time()
+print('test 3 run ok')
+
+assert np.quantile(torch.abs(out1 - out2).cpu(), 0.99) < 5e-5
+assert np.quantile(torch.abs(out1 - out3).cpu(), 0.99) < 5e-5
+assert np.quantile(torch.abs(out2 - out3).cpu(), 0.99) < 5e-5
+print("check ok!")
+
+
+print('Running time 1 : %s Seconds'%(end1-start1))
+print('Running time 2 : %s Seconds'%(end2-start2))
+print('Running time 3 : %s Seconds'%(end3-start3))
 
 
 

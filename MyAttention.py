@@ -26,7 +26,7 @@ class MyAttention1(Function):
         batch, len, n_head, ch = query.shape
         device = query.device
         topk = pos.shape[-1]
-        # 这里相当于把每个query要计算的topk个key和value存下来，需要2*topk倍的内存
+        # 这里相当于把每个query要计算的topk个key和value存下来，需要额外 topk倍的内存
         k = torch.zeros(batch, len, n_head, topk, ch, device=device)
         v = torch.zeros(batch, len, n_head, topk, ch, device=device)
         query = query.unsqueeze(-2)
@@ -44,8 +44,35 @@ class MyAttention1(Function):
         return F.scaled_dot_product_attention(query, k, v).squeeze(-2)
     
 
-# 方案2 效率方案，保证速度
+# 方案2  避免显示存储k和v导致的 额外topk倍的内存
 class MyAttention2(Function):
+    @staticmethod
+    def forward(ctx, query, key, value, pos):
+        batch, len, n_head, ch = query.shape
+        topk = pos.shape[-2]
+
+        # 初始化输出attention结果
+        output = torch.zeros(batch, len, n_head, ch, device=query.device)
+
+
+        # 直接计算每个query的attention
+        for b in range(batch):
+            for l in range(len):
+                for h in range(n_head):
+                    # 直接从key和value中提取所需的top-k部分
+                    selected_k = key[b, pos[b, l, h], h]
+                    selected_v = value[b, pos[b, l, h], h]
+
+                    # 计算scaled dot product attention
+                    # 注意：这里假设没有mask，且不需要额外的softmax归一化因子
+                    attn_weights = F.softmax(query[b, l, h].matmul(selected_k.transpose(-2, -1)) / sqrt(ch), dim=-1)
+                    output[b, l, h] = attn_weights.matmul(selected_v)
+
+        return output
+
+
+# 方案3 效率方案，保证速度
+class MyAttention3(Function):
     @staticmethod
     def forward(ctx, query, key, value, pos):
         batch, len_q, n_head, ch = query.shape
