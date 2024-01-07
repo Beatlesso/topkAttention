@@ -21,7 +21,7 @@ d_model = 256
 topk = 20
 '''
 
-batch = 320
+batch = 8
 len = 20000
 n_head = 8
 d_model = 256
@@ -92,16 +92,16 @@ pos = torch.randint(0, len, size=(batch, len, n_head, topk), device=device)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 '''
 
-start2 = time.time()
-out2 = MyAttention2.apply(query, key, value, pos)
-# print(out2.shape)
-end2 = time.time()
-print('Running time 2 : %s Seconds'%(end2-start2))
+# start2 = time.time()
+# out2 = MyAttention2.apply(query, key, value, pos)
+# # print(out2.shape)
+# end2 = time.time()
+# print('Running time 2 : %s Seconds'%(end2-start2))
 
-# start3 = time.time()
-# out3 = MyAttention3.apply(query, key, value, pos)
-# end3 = time.time()
-# print('Running time 3 : %s Seconds'%(end3-start3))
+start3 = time.time()
+out3 = MyAttention3.apply(query, key, value, pos)
+end3 = time.time()
+print('Running time 3 : %s Seconds'%(end3-start3))
 
 
 
