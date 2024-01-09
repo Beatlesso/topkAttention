@@ -1,4 +1,0 @@
-# ninja log v5
-1	8161	1704782148093364997	/home/luoyicong/Cuda_study/topkAttention/ops/build/temp.linux-x86_64-cpython-310/home/luoyicong/Cuda_study/topkAttention/ops/src/cpu/topk_attn_cup.o	c2f6f7f790bff791
-1	17261	1704782157145576655	/home/luoyicong/Cuda_study/topkAttention/ops/build/temp.linux-x86_64-cpython-310/home/luoyicong/Cuda_study/topkAttention/ops/src/cuda/topk_attn_cuda.o	670ac39751e82ec7
-2	24414	1704782164317742613	/home/luoyicong/Cuda_study/topkAttention/ops/build/temp.linux-x86_64-cpython-310/home/luoyicong/Cuda_study/topkAttention/ops/src/vision.o	8b543b5889445159
