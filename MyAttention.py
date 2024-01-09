@@ -97,3 +97,4 @@ class MyAttention3(Function):
 
         query = query.unsqueeze(-2)
         return F.scaled_dot_product_attention(query, k, v).squeeze(-2)
+
