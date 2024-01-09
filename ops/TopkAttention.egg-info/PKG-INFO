@@ -1,0 +1,6 @@
+Metadata-Version: 2.1
+Name: TopkAttention
+Version: 1.0
+Summary: PyTorch Wrapper for CUDA Functions of TopkAttention
+Home-page: https://github.com/Beatlesso/topkAttention
+Author: Yicong Luo

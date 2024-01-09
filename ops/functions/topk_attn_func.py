@@ -18,16 +18,47 @@ from torch.autograd.function import once_differentiable
 # 性能测试使用
 from pyinstrument import Profiler
 
-import MultiScaleDeformableAttention as MSDA
+import TopkAttention as TKA
 
 
-class MSDeformAttnFunction(Function):
+class TopkAttnFunction(Function):
     @staticmethod
-    def forward(ctx):
-        pass
+    def forward(ctx, query, key, value, pos):
+        output = TKA.topk_attn_forward(
+            query, value, key, pos)
+        ctx.save_for_backward(query, value, key, pos)
+        return output        
     
 
     @staticmethod
     @once_differentiable
-    def backward(ctx, grad_output):
-        pass
+    def backward(ctx, query, key, value, pos, grad_output):
+        query, key, value, pos = ctx.saved_tensors
+        grad_query, grad_value, grad_key, grad_pos = \
+            TKA.topk_attn_backward(
+                query, key, value, pos, grad_output)
+
+        return grad_query, grad_value, grad_key, grad_pos
+
+
+class TopkAttnFunction_Pytorch(Function):
+    @staticmethod
+    def forward(ctx, query, key, value, pos):
+        batch, len_q, n_head, ch = query.shape
+        topk = pos.shape[-1]
+
+        # 这里需要进行扩张，需要 2*topk 倍的内存
+        key = key.unsqueeze(-2).repeat(1, 1, 1, topk, 1)
+        value = value.unsqueeze(-2).repeat(1, 1, 1, topk, 1)
+        pos = pos.unsqueeze(-1).repeat(1, 1, 1, 1, ch)
+
+        # 这里gather同样需要 2*topk 倍的内存
+        # 使用torch.gather
+        k = torch.gather(key, 1, pos).reshape(batch, len_q, n_head, topk, ch)
+        v = torch.gather(value, 1, pos).reshape(batch, len_q, n_head, topk, ch)
+
+        print(k.shape)
+        print(v.shape)
+
+        query = query.unsqueeze(-2)
+        return F.scaled_dot_product_attention(query, k, v).squeeze(-2)
