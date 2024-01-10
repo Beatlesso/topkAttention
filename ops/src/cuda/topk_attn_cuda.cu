@@ -39,8 +39,6 @@ at::Tensor topk_attn_cuda_forward(
     AT_ASSERTM(ch_qk % ch_v == 0, "the channel of query(%d) must divide the channel of key(%d)", ch_qk, ch_v);
     auto output = at::zeros({batch, len_q, n_head, ch_v}, query.options());
     auto output_view = output.view({batch/micro_batch, micro_batch, len_q, n_head, ch_v});
-    auto temp = at::zeros({batch, len_q, n_head, topk}, query.options());
-    auto temp_view = temp.view({batch/micro_batch, micro_batch, len_q, n_head, topk});
 
     /* ************核心部分****************** */
 
@@ -49,11 +47,10 @@ at::Tensor topk_attn_cuda_forward(
     auto key_strad = micro_batch * len_kv * n_head * ch_qk;
     auto value_strad = micro_batch * len_kv * n_head * ch_v;
     auto pos_strad = micro_batch * len_q * n_head * topk;
-
-    for (int n = 0 ; n < batch / micro_batch ; ++ n) 
+    const int iter = batch / micro_batch;
+    for (int n = 0 ; n < iter ; ++ n) 
     {
         auto out_n = output_view.select(0, n);
-        auto temp_n = temp_view.select(0, n);
         AT_DISPATCH_FLOATING_TYPES(query.type(), "topk_attention_micro_batch_forward_cuda", ([&] {
             topk_attention_micro_batch_cuda(at::cuda::getCurrentCUDAStream(),     
                 query.data<scalar_t>() + n * query_strad,
@@ -61,7 +58,6 @@ at::Tensor topk_attn_cuda_forward(
                 value.data<scalar_t>() + n * value_strad,
                 pos.data<int>() + n * pos_strad,
                 micro_batch, len_q, len_kv, n_head, ch_qk, ch_v, topk,
-                temp_n.data<scalar_t>(),
                 out_n.data<scalar_t>());
         }));
     }
@@ -80,7 +76,7 @@ std::vector<at::Tensor> topk_attn_cuda_backward(
     const at::Tensor &value,
     const at::Tensor &pos,
     const at::Tensor &grad_output,
-    const int micro_batch)
+    const int m_batch)
 {
     AT_ASSERTM(query.is_contiguous(), "query tensor has to be contiguous");
     AT_ASSERTM(value.is_contiguous(), "value tensor has to be contiguous");
