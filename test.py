@@ -23,7 +23,7 @@ topk = 20
 '''
 
 batch = 8
-len = 20000
+len = 1000
 n_head = 8
 d_model = 256
 topk = 20
@@ -57,68 +57,68 @@ pos = torch.randint(0, len, size=(batch, len, n_head, topk), device=device)
 尝试完全注意力区域
 对于完全注意力而言，qkv的形状必须为 (batch, n_head, H*W, d_model / n_head) 才是正确的
 '''
-start = time.time()
-query = query.transpose(1, 2)
-key = key.transpose(1, 2)
-value = value.transpose(1, 2)
+# start = time.time()
+# query = query.transpose(1, 2)
+# key = key.transpose(1, 2)
+# value = value.transpose(1, 2)
 
 
-# print(value.shape)
-out = F.scaled_dot_product_attention(query, key, value)
-# print(out.shape)
-# print(out)
-end = time.time()
-print('FullAttention Running time  : %s Seconds'%(end-start))
-scale = np.sqrt(d_model // n_head)
-Attention = ScaledDotProductAttention(scale)
-attn, std_out = Attention(query, key, value, None)
-assert np.quantile(torch.abs(out - std_out).cpu(), 0.99) < 5e-5
-print('check OK!')
+# # print(value.shape)
+# out = F.scaled_dot_product_attention(query, key, value)
+# # print(out.shape)
+# # print(out)
+# end = time.time()
+# print('FullAttention Running time  : %s Seconds'%(end-start))
+# scale = np.sqrt(d_model // n_head)
+# Attention = ScaledDotProductAttention(scale)
+# attn, std_out = Attention(query, key, value, None)
+# assert np.quantile(torch.abs(out - std_out).cpu(), 0.99) < 5e-5
+# print('check OK!')
 
 
-# output = torch.zeros(1, 1, 4, 1)
-# for i in range(4):
-#     attn_weights = F.softmax(query[0, 0, i].matmul(key[0][0].transpose(-2, -1)) / sqrt(1), dim=-1)
-#     print(attn_weights)
-#     output[0, 0, i] = attn_weights.matmul(value[0][0])
-# print(output)
+# # output = torch.zeros(1, 1, 4, 1)
+# # for i in range(4):
+# #     attn_weights = F.softmax(query[0, 0, i].matmul(key[0][0].transpose(-2, -1)) / sqrt(1), dim=-1)
+# #     print(attn_weights)
+# #     output[0, 0, i] = attn_weights.matmul(value[0][0])
+# # print(output)
 '''
 尝试完全注意力区域
 '''
 
-# start1 = time.time()
-# out1 = MyAttention1.apply(query, key, value, pos)
-# # print(out1.shape)
-# torch.cuda.synchronize()
-# end1 = time.time()
-# print('test 1 run ok')
+start1 = time.time()
+out1 = MyAttention1.apply(query, key, value, pos)
+# print(out1.shape)
+torch.cuda.synchronize()
+end1 = time.time()
+print('test 1 run ok')
 
-# # time.sleep(10)
+# time.sleep(10)
 
-# start2 = time.time()
-# out2 = MyAttention2.apply(query, key, value, pos)
-# # print(out2.shape)
-# torch.cuda.synchronize()
-# end2 = time.time()
-# print('test 2 run ok')
-
-
-# start3 = time.time()
-# out3 = MyAttention3.apply(query, key, value, pos)
-# # print(out3.shape)
-# torch.cuda.synchronize()
-# end3 = time.time()
-# print('test 3 run ok')
-
-# assert np.quantile(torch.abs(out1 - out2).cpu(), 0.99) < 5e-5
-# assert np.quantile(torch.abs(out1 - out3).cpu(), 0.99) < 5e-5
-# assert np.quantile(torch.abs(out2 - out3).cpu(), 0.99) < 5e-5
-# print("check ok!")
+start2 = time.time()
+out2 = MyAttention2.apply(query, key, value, pos)
+# print(out2.shape)
+torch.cuda.synchronize()
+end2 = time.time()
+print('test 2 run ok')
 
 
-# print('Running time 1 : %s Seconds'%(end1-start1))
-# print('Running time 2 : %s Seconds'%(end2-start2))
-# print('Running time 3 : %s Seconds'%(end3-start3))
+start3 = time.time()
+out3 = MyAttention3.apply(query, key, value, pos)
+# print(out3.shape)
+torch.cuda.synchronize()
+end3 = time.time()
+print('test 3 run ok')
+
+assert np.quantile(torch.abs(out1 - out2).cpu(), 0.99) < 5e-5
+assert np.quantile(torch.abs(out1 - out3).cpu(), 0.99) < 5e-5
+assert np.quantile(torch.abs(out2 - out3).cpu(), 0.99) < 5e-5
+print("check ok!")
+
+
+print('Running time 1 : %s Seconds'%(end1-start1))
+print('Running time 2 : %s Seconds'%(end2-start2))
+print('Running time 3 : %s Seconds'%(end3-start3))
 
 '''
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

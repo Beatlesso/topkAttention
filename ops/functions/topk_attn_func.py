@@ -1,11 +1,3 @@
-# ------------------------------------------------------------------------------------------------
-# Deformable DETR
-# Copyright (c) 2020 SenseTime. All Rights Reserved.
-# Licensed under the Apache License, Version 2.0 [see LICENSE for details]
-# ------------------------------------------------------------------------------------------------
-# Modified from https://github.com/chengdazhi/Deformable-Convolution-V2-PyTorch/tree/pytorch_1.0.0
-# ------------------------------------------------------------------------------------------------
-
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
@@ -23,22 +15,23 @@ import TopkAttention as TKA
 
 class TopkAttnFunction(Function):
     @staticmethod
-    def forward(ctx, query, key, value, pos):
-        output = TKA.topk_attn_forward(
-            query, value, key, pos)
-        ctx.save_for_backward(query, value, key, pos)
+    def forward(ctx, query, key, value, pos, micro_batch):
+        ctx.micro_batch = int(micro_batch)
+        pos = pos.type(torch.int32)
+        output = TKA.topk_attn_forward(query, key, value, pos, ctx.micro_batch)
+        ctx.save_for_backward(query, key, value, pos)
         return output        
     
 
     @staticmethod
     @once_differentiable
-    def backward(ctx, query, key, value, pos, grad_output):
+    def backward(ctx, grad_output):
         query, key, value, pos = ctx.saved_tensors
-        grad_query, grad_value, grad_key, grad_pos = \
+        grad_query, grad_key, grad_value, grad_pos = \
             TKA.topk_attn_backward(
-                query, key, value, pos, grad_output)
+                query, key, value, pos, grad_output, ctx.micro_batch)
 
-        return grad_query, grad_value, grad_key, grad_pos
+        return grad_query, grad_key, grad_value, grad_pos
 
 
 class TopkAttnFunction_Pytorch(Function):
@@ -56,9 +49,6 @@ class TopkAttnFunction_Pytorch(Function):
         # 使用torch.gather
         k = torch.gather(key, 1, pos).reshape(batch, len_q, n_head, topk, ch)
         v = torch.gather(value, 1, pos).reshape(batch, len_q, n_head, topk, ch)
-
-        print(k.shape)
-        print(v.shape)
 
         query = query.unsqueeze(-2)
         return F.scaled_dot_product_attention(query, k, v).squeeze(-2)

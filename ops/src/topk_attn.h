@@ -12,13 +12,14 @@ topk_attn_forward(
     const at::Tensor &query, 
     const at::Tensor &value,
     const at::Tensor &key,
-    const at::Tensor &pos)
+    const at::Tensor &pos,
+    const int micro_batch)
 {
-    if (value.type().is_cuda())
+    if (query.type().is_cuda())
     {
 #ifdef WITH_CUDA
         return topk_attn_cuda_forward(
-            query, value, key, pos);
+            query, key, value, pos, micro_batch);
 #else
         AT_ERROR("Not compiled with GPU support");
 #endif
@@ -29,16 +30,17 @@ topk_attn_forward(
 std::vector<at::Tensor>
 topk_attn_backward(
     const at::Tensor &query, 
-    const at::Tensor &value,
     const at::Tensor &key,
+    const at::Tensor &value,
     const at::Tensor &pos,
-    const at::Tensor &grad_output)
+    const at::Tensor &grad_output,
+    const int micro_batch)
 {
-    if (value.type().is_cuda())
+    if (query.type().is_cuda())
     {
 #ifdef WITH_CUDA
         return topk_attn_cuda_backward(
-            query, value, key, pos, grad_output);
+            query, key, value, pos, grad_output, micro_batch);
 #else
         AT_ERROR("Not compiled with GPU support");
 #endif

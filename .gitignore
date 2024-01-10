@@ -2,3 +2,6 @@
 *.jpg
 *.json
 *.pyc
+ops/build
+ops/dist
+ops/TopkAttention.egg-info
