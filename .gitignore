@@ -5,3 +5,7 @@
 ops/build
 ops/dist
 ops/TopkAttention.egg-info
+train_ops
+train_ops/build
+train_ops/dist
+train_ops/TopkAttention.egg-info
