@@ -87,8 +87,8 @@ __global__ void topk_attention_micro_batch_gpu_kernel(  const int n, // n = micr
 
         __shared__ scalar_t temp_buffer[MAXN];
         const int thread_temp_buffer_offset = thread_head_id * topk;
-        if(thread_id < topk) {
-            temp_buffer[thread_id + thread_temp_buffer_offset] = 0;
+        for(int i = thread_id ; i < topk ; i += ch_v) {
+            temp_buffer[i + thread_temp_buffer_offset] = 0;
         }
         __syncthreads();
 
@@ -102,19 +102,19 @@ __global__ void topk_attention_micro_batch_gpu_kernel(  const int n, // n = micr
             for(int j = thread_id ; j < ch_qk ; j += ch_v)
             {
               thread_sum += query_ptr[j] * key_ptr[j];
-            //   if(q_idx == 0) 
-            //   {
-            //         printf("batch_idx is %d, q_idx is %d, head_idx is %d, ch_idx is %d\n  \
-            //             t is %d, pos is %d, query is %lf, key is %lf\n",  \
-            //             batch_idx, q_idx, head_idx, ch_idx,     \
-            //             t, position, query_ptr[j], key_ptr[j]);
-            //   }
+              if(q_idx == 0 && head_idx == 0) 
+              {
+                    // printf("batch_idx is %d, q_idx is %d, head_idx is %d, ch_idx is %d\n  \
+                    //     t is %d, pos is %d, query is %lf, key is %lf\n",  \
+                    //     batch_idx, q_idx, head_idx, ch_idx,     \
+                    //     t, position, query_ptr[j], key_ptr[j]);
+              }
             } 
             atomicAdd(&temp_buffer[thread_temp_buffer_offset + t], thread_sum);
         }
         __syncthreads();
 
-        // if(thread_id == 0 && q_idx == 0) {
+        // if(head_idx == 0 && q_idx == 0 && ch_idx == 0) {
         //     for (int t = 0 ; t < topk ; ++ t) 
         //     {
         //         printf("temp_buffer[%d] is %lf ", t, temp_buffer[t]);
@@ -128,21 +128,22 @@ __global__ void topk_attention_micro_batch_gpu_kernel(  const int n, // n = micr
             sh_sum[thread_head_id] = 0;
         }
 
-        if(thread_id < topk) {
-            temp_buffer[thread_id + thread_temp_buffer_offset] /= fact;
-            sh_maxv[thread_head_id] = max(sh_maxv[thread_head_id], temp_buffer[thread_id + thread_temp_buffer_offset]);
-        }
-        __syncthreads();
-
-        if(thread_id < topk) {
-            temp_buffer[thread_id + thread_temp_buffer_offset] = exp(temp_buffer[thread_id + thread_temp_buffer_offset] - sh_maxv[thread_head_id]);
-            atomicAdd(&sh_sum[thread_head_id], temp_buffer[thread_id + thread_temp_buffer_offset]);
+        for(int i = thread_id ; i < topk ; i += ch_v) {
+            temp_buffer[i + thread_temp_buffer_offset] /= fact;
+            sh_maxv[thread_head_id] = max(sh_maxv[thread_head_id], temp_buffer[i + thread_temp_buffer_offset]);
         }
         __syncthreads();
 
 
-        if(thread_id < topk) {
-            temp_buffer[thread_id + thread_temp_buffer_offset] /= sh_sum[thread_head_id];
+        for(int i = thread_id ; i < topk ; i += ch_v) {
+            temp_buffer[i + thread_temp_buffer_offset] = exp(temp_buffer[i + thread_temp_buffer_offset] - sh_maxv[thread_head_id]);
+            atomicAdd(&sh_sum[thread_head_id], temp_buffer[i + thread_temp_buffer_offset]);
+        }
+        __syncthreads();
+
+
+        for(int i = thread_id ; i < topk ; i += ch_v) {
+            temp_buffer[i + thread_temp_buffer_offset] /= sh_sum[thread_head_id];
         }
         __syncthreads();
 

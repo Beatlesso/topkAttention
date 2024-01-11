@@ -86,22 +86,49 @@ class ScaledDotProductAttention(nn.Module):
 class MyAttention3(Function):
     @staticmethod
     def forward(ctx, query, key, value, pos):
-        batch, len_q, n_head, ch = query.shape
+        batch, len_q, n_head, ch_qk = query.shape
+        ch_v = value.shape[-1]
         topk = pos.shape[-1]
 
         # 这里需要进行扩张，需要 2*topk 倍的内存
         key = key.unsqueeze(-2).repeat(1, 1, 1, topk, 1)
         value = value.unsqueeze(-2).repeat(1, 1, 1, topk, 1)
-        pos = pos.unsqueeze(-1).repeat(1, 1, 1, 1, ch)
+        pos_k = pos.unsqueeze(-1).repeat(1, 1, 1, 1, ch_qk)
+        pos_v = pos.unsqueeze(-1).repeat(1, 1, 1, 1, ch_v)
 
         # print(key.shape)
         # print(value.shape)
-        # print(pos.shape)
+        # print(pos_k.shape)
+        # print(pos_v.shape)
 
         # 这里gather同样需要 2*topk 倍的内存
         # 使用torch.gather
-        k = torch.gather(key, 1, pos).reshape(batch, len_q, n_head, topk, ch)
-        v = torch.gather(value, 1, pos).reshape(batch, len_q, n_head, topk, ch)
+        k = torch.gather(key, 1, pos_k).reshape(batch, len_q, n_head, topk, ch_qk)
+        v = torch.gather(value, 1, pos_v).reshape(batch, len_q, n_head, topk, ch_v)
 
         query = query.unsqueeze(-2)
+        return F.scaled_dot_product_attention(query, k, v).squeeze(-2)
+    
+
+
+# 暴力方案
+class Force(Function):
+    @staticmethod
+    def forward(ctx, query, key, value, pos):
+        batch, len, n_head, ch_qk = query.shape
+        ch_v = value.shape[-1]
+        device = query.device
+        topk = pos.shape[-1]
+        # 这里相当于把每个query要计算的topk个key和value存下来，需要额外 topk倍的内存
+        k = torch.zeros(batch, len, n_head, topk, ch_qk, device=device)
+        v = torch.zeros(batch, len, n_head, topk, ch_v, device=device)
+        query = query.unsqueeze(-2)
+
+        # 使用对应的key和value引填充k和v
+        for b in range(batch):
+            for l in range(len):
+                for h in range(n_head):
+                    k[b, l, h] = key[b, pos[b, l, h], h]
+                    v[b, l, h] = value[b, pos[b, l, h], h]
+
         return F.scaled_dot_product_attention(query, k, v).squeeze(-2)
