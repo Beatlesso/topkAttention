@@ -6,12 +6,12 @@ from functions.topk_attn_func import TopkAttnFunction, TopkAttnFunction_Pytorch,
 import math
 from torch.profiler import profile, record_function, ProfilerActivity
 
-batch = 8
-len = 20000
+batch = 1
+len = 40000
 n_head = 8
 d_model = 256
 topk = 20
-micro_batch = 8
+micro_batch = 1
 
 # batch = 2
 # len = 5
@@ -41,11 +41,11 @@ pos = torch.randint(0, len, size=(batch, len, n_head, topk), device=device)
 # print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 # print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 
-# out1 = TopkAttnFunction.apply(query, key, value, pos, micro_batch)
-# # out1 = MyAttention3.apply(query, key, value, pos)
+out1 = TopkAttnFunction.apply(query, key, value, pos, micro_batch)
 
 # torch_model = TopkAttnFunction_Pytorch(scale = math.sqrt(d_model // n_head))
 # out2 = torch_model(query, key, value, pos)
+out2 = MyAttention3.apply(query, key, value, pos)
 # print(out1)
 # print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 # print("~~~~~~~~~~~~~分隔符~~~~~~~~~~~~~")
@@ -55,8 +55,8 @@ pos = torch.randint(0, len, size=(batch, len, n_head, topk), device=device)
 # # print(out2.dtype)
 # # print(out1.shape)
 # # print(out2.shape)
-# assert np.quantile(torch.abs(out1 - out2).cpu(), 0.99) < 5e-5
-# print("test ok!")
+assert np.quantile(torch.abs(out1 - out2).cpu(), 0.99) < 5e-5
+print("test ok!")
 
 
 
@@ -64,30 +64,24 @@ pos = torch.randint(0, len, size=(batch, len, n_head, topk), device=device)
 '''
 下面是性能测试
 '''
-# CUDA
-for i in range(20):
-    TopkAttnFunction.apply(query, key, value, pos, micro_batch)
+# # CUDA
+# for i in range(20):
+#     TopkAttnFunction.apply(query, key, value, pos, micro_batch)
+# with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, with_stack=True) as prof:
+#     out1 = TopkAttnFunction.apply(query, key, value, pos, micro_batch)
 
-print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+# print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=100))
+# prof.export_chrome_trace("./TopkAttnFunction.json")
 
-with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, with_stack=True) as prof:
-    out1 = TopkAttnFunction.apply(query, key, value, pos, micro_batch)
+# print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+# print("~~~~~~~~~~~~~分隔符~~~~~~~~~~~~~")
+# print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 
-print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=100))
-prof.export_chrome_trace("./TopkAttnFunction.json")
+# #  Pytorch
+# for i in range(20):
+#     MyAttention3.apply(query, key, value, pos)
+# with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, with_stack=True) as prof:
+#     out1 = MyAttention3.apply(query, key, value, pos)
 
-print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-print("~~~~~~~~~~~~~分隔符~~~~~~~~~~~~~")
-print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-
-#  Pytorch
-for i in range(20):
-    MyAttention3.apply(query, key, value, pos)
-
-print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-
-with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, with_stack=True) as prof:
-    out1 = MyAttention3.apply(query, key, value, pos)
-
-print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=100))
-prof.export_chrome_trace("./PytorchAttnFunction.json")
+# print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=100))
+# prof.export_chrome_trace("./PytorchAttnFunction.json")

@@ -13,7 +13,8 @@
       i += blockDim.x * gridDim.x)
 
 const int CUDA_NUM_THREADS = 1024;
-const int MAXN = 100;
+const int MAXN = 1024;
+const int MAXN_HEAD = 16;
 inline int GET_BLOCKS(const int N, const int num_threads)
 {
   return (N + num_threads - 1) / num_threads;
@@ -59,9 +60,10 @@ __global__ void topk_attention_micro_batch_gpu_kernel(  const int n, // n = micr
         idx /= n_head;
         const int q_idx = idx % len_q;
         idx /= len_q;
-        const int batch_idx = idx; 
-        // 事实上 ch_idx 应当等于 thread_id
-        int thread_id = threadIdx.x;
+        const int batch_idx = idx;  
+        // 事实上 ch_idx 应当等于 thread_id (当num_threads = ch_v的时候)
+        const int thread_id = threadIdx.x % ch_v;
+        const int thread_head_id = threadIdx.x / ch_v;
         // printf("The thread_id is %d, and the ch_idx is %d\n", thread_id, ch_idx);
         const int query_head_strad = ch_qk;
         const int query_len_strad = n_head * query_head_strad;
@@ -84,8 +86,9 @@ __global__ void topk_attention_micro_batch_gpu_kernel(  const int n, // n = micr
         const int output_batch_strad = len_q * output_len_strad;
 
         __shared__ scalar_t temp_buffer[MAXN];
+        const int thread_temp_buffer_offset = thread_head_id * topk;
         if(thread_id < topk) {
-            temp_buffer[thread_id] = 0;
+            temp_buffer[thread_id + thread_temp_buffer_offset] = 0;
         }
         __syncthreads();
 
@@ -107,7 +110,7 @@ __global__ void topk_attention_micro_batch_gpu_kernel(  const int n, // n = micr
             //             t, position, query_ptr[j], key_ptr[j]);
             //   }
             } 
-            atomicAdd(&temp_buffer[t], thread_sum);
+            atomicAdd(&temp_buffer[thread_temp_buffer_offset + t], thread_sum);
         }
         __syncthreads();
 
@@ -119,27 +122,27 @@ __global__ void topk_attention_micro_batch_gpu_kernel(  const int n, // n = micr
         //     printf("\n");
         // }        
 
-        __shared__ scalar_t sh_maxv, sh_sum;
-        if (threadIdx.x == 0) {
-            sh_maxv = -FLT_MAX;
-            sh_sum = 0;
+        __shared__ scalar_t sh_maxv[MAXN_HEAD], sh_sum[MAXN_HEAD];
+        if (thread_id == 0) {
+            sh_maxv[thread_head_id] = -FLT_MAX;
+            sh_sum[thread_head_id] = 0;
         }
 
         if(thread_id < topk) {
-            temp_buffer[thread_id] /= fact;
-            sh_maxv = max(sh_maxv, temp_buffer[thread_id]);
-        }
-        __syncthreads();
-
-        if(thread_id < topk) {
-            temp_buffer[thread_id] = exp(temp_buffer[thread_id] - sh_maxv);
-            atomicAdd(&sh_sum, temp_buffer[thread_id]);
+            temp_buffer[thread_id + thread_temp_buffer_offset] /= fact;
+            sh_maxv[thread_head_id] = max(sh_maxv[thread_head_id], temp_buffer[thread_id + thread_temp_buffer_offset]);
         }
         __syncthreads();
 
+        if(thread_id < topk) {
+            temp_buffer[thread_id + thread_temp_buffer_offset] = exp(temp_buffer[thread_id + thread_temp_buffer_offset] - sh_maxv[thread_head_id]);
+            atomicAdd(&sh_sum[thread_head_id], temp_buffer[thread_id + thread_temp_buffer_offset]);
+        }
+        __syncthreads();
+
 
         if(thread_id < topk) {
-            temp_buffer[thread_id] /= sh_sum;
+            temp_buffer[thread_id + thread_temp_buffer_offset] /= sh_sum[thread_head_id];
         }
         __syncthreads();
 
@@ -150,7 +153,7 @@ __global__ void topk_attention_micro_batch_gpu_kernel(  const int n, // n = micr
             const scalar_t* value_ptr = value + batch_idx * value_batch_strad + position * value_len_strad + head_idx * value_head_strad;  
             for (int j = thread_id ; j < ch_v ; j += ch_v)
             {
-                atomicAdd(&output_ptr[j], value_ptr[j] * temp_buffer[t]);
+                atomicAdd(&output_ptr[j], value_ptr[j] * temp_buffer[t + thread_temp_buffer_offset]);
             }
         }  
     }
@@ -179,7 +182,15 @@ void topk_attention_micro_batch_cuda(cudaStream_t stream,
 
   const int num_kernels = micro_batch * len_q * n_head * ch_v;
   const int num_actual_kernels = micro_batch * len_q * n_head * ch_v;
-  const int num_threads = ch_v; 
+  int num_threads = 0; 
+  if(n_head * ch_v <= CUDA_NUM_THREADS) 
+  {
+    num_threads = n_head * ch_v; 
+  } 
+  else
+  {
+    num_threads = ch_v; 
+  }
 
 /*
     inline int GET_BLOCKS(const int N, const int num_threads)
@@ -214,6 +225,5 @@ void topk_attention_micro_batch_cuda(cudaStream_t stream,
     printf("error in topk_attention_micro_batch_cuda: %s\n", cudaGetErrorString(err));
   }
 }
-
 
 

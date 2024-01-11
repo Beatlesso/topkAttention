@@ -37,6 +37,8 @@ at::Tensor topk_attn_cuda_forward(
     const int micro_batch = std::min(batch, m_batch);
     AT_ASSERTM(batch % micro_batch == 0, "batch(%d) must divide micro_batch(%d)", batch, micro_batch);
     AT_ASSERTM(ch_qk % ch_v == 0, "the channel of query(%d) must divide the channel of key(%d)", ch_qk, ch_v);
+    AT_ASSERTM(ch_v <= 1024, "the channel of value(%d) must less or equal to 1024!", ch_v);
+    AT_ASSERTM(topk <= len_q, "topk(%d) must less or equal to len_q(%d)!", topk, len_q);
     auto output = at::zeros({batch, len_q, n_head, ch_v}, query.options());
     auto output_view = output.view({batch/micro_batch, micro_batch, len_q, n_head, ch_v});
 
