@@ -5,31 +5,32 @@ import torch.nn.functional as F
 from functions.topk_attn_func import *
 from torch.profiler import profile, record_function, ProfilerActivity
 
-# batch = 8
-# len = 1000
-# n_head = 8
-# d_model_qk = 256
-# d_model_v = 128
-# topk = 20
-# micro_batch = 8
+batch = 8
+len_q = 100
+len_kv = 200
+n_head = 8
+d_model_qk = 256
+d_model_v = 128
+topk = 20
+micro_batch = 8
 
-batch = 2
-len = 10
-n_head = 2
-d_model_qk = 8
-d_model_v = 4
-topk = 5
-micro_batch = 2
+# batch = 2
+# len = 10
+# n_head = 2
+# d_model_qk = 8
+# d_model_v = 4
+# topk = 5
+# micro_batch = 2
 
 dtype = torch.float32
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu' )
 torch.cuda.set_device(0)
 print(device)
 
-query = torch.randn(batch, len, n_head, d_model_qk // n_head, dtype=dtype, device=device)
-key = torch.randn(batch, len, n_head, d_model_qk // n_head, dtype=dtype, device=device)
-value = torch.randn(batch, len, n_head, d_model_v // n_head, dtype=dtype, device=device)
-pos = torch.randint(0, len, size=(batch, len, n_head, topk), device=device)
+query = torch.randn(batch, len_q, n_head, d_model_qk // n_head, dtype=dtype, device=device)
+key = torch.randn(batch, len_kv, n_head, d_model_qk // n_head, dtype=dtype, device=device)
+value = torch.randn(batch, len_kv, n_head, d_model_v // n_head, dtype=dtype, device=device)
+pos = torch.randint(0, len_kv, size=(batch, len_q, n_head, topk), device=device)
 
 
 '''
@@ -47,7 +48,8 @@ out1 = TopkAttnFunction.apply(query, key, value, pos, micro_batch)
 
 # torch_model = TopkAttnFunction_Pytorch(scale = math.sqrt(d_model // n_head))
 # out2 = torch_model(query, key, value, pos)
-out2 = MyAttention3.apply(query, key, value, pos)
+# out2 = MyAttention3.apply(query, key, value, pos)
+out2 = Force.apply(query, key, value, pos)
 print(out1.shape)
 print(out1)
 print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")

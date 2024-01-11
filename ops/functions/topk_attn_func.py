@@ -10,7 +10,7 @@ from torch.autograd import Function
 from torch.autograd.function import once_differentiable
 # 性能测试使用
 from pyinstrument import Profiler
-
+from math import sqrt
 import TopkAttention as TKA
 
 
@@ -115,20 +115,26 @@ class MyAttention3(Function):
 class Force(Function):
     @staticmethod
     def forward(ctx, query, key, value, pos):
-        batch, len, n_head, ch_qk = query.shape
+        batch, len_q, n_head, ch_qk = query.shape
         ch_v = value.shape[-1]
+        len_kv = value.shape[1]
         device = query.device
         topk = pos.shape[-1]
-        # 这里相当于把每个query要计算的topk个key和value存下来，需要额外 topk倍的内存
-        k = torch.zeros(batch, len, n_head, topk, ch_qk, device=device)
-        v = torch.zeros(batch, len, n_head, topk, ch_v, device=device)
-        query = query.unsqueeze(-2)
 
-        # 使用对应的key和value引填充k和v
+        # 初始化输出attention结果
+        output = torch.zeros(batch, len_q, n_head, ch_v, device=query.device)
+
+        # 直接计算每个query的attention
         for b in range(batch):
-            for l in range(len):
+            for l in range(len_q):
                 for h in range(n_head):
-                    k[b, l, h] = key[b, pos[b, l, h], h]
-                    v[b, l, h] = value[b, pos[b, l, h], h]
+                    # 直接从key和value中提取所需的top-k部分
+                    selected_k = key[b, pos[b, l, h], h]
+                    selected_v = value[b, pos[b, l, h], h]
 
-        return F.scaled_dot_product_attention(query, k, v).squeeze(-2)
+                    # 计算scaled dot product attention
+                    # 注意：这里假设没有mask，且不需要额外的softmax归一化因子
+                    attn_weights = F.softmax(query[b, l, h].matmul(selected_k.transpose(-2, -1)) / sqrt(ch_qk), dim=-1)
+                    output[b, l, h] = attn_weights.matmul(selected_v)
+
+        return output
