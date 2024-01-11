@@ -10,8 +10,8 @@
 at::Tensor
 topk_attn_forward(
     const at::Tensor &query, 
-    const at::Tensor &value,
     const at::Tensor &key,
+    const at::Tensor &value,
     const at::Tensor &pos,
     const int micro_batch)
 {

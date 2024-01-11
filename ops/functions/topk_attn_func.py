@@ -70,6 +70,10 @@ class ScaledDotProductAttention(nn.Module):
 
     def forward(self, q, k, v):
         score = torch.matmul(q, k.transpose(-1, -2))
+        # print(q.shape)
+        # print(k.transpose(-1, -2).shape)
+        # print(score)
+        # print(score.shape)
         score = score / self.scale 
 
         attn = self.softmax(score) 
@@ -98,9 +102,6 @@ class MyAttention3(Function):
         # 使用torch.gather
         k = torch.gather(key, 1, pos).reshape(batch, len_q, n_head, topk, ch)
         v = torch.gather(value, 1, pos).reshape(batch, len_q, n_head, topk, ch)
-
-        print(k.shape)
-        print(v.shape)
 
         query = query.unsqueeze(-2)
         return F.scaled_dot_product_attention(query, k, v).squeeze(-2)
