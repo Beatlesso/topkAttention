@@ -4,7 +4,7 @@
 #include <ATen/cuda/CUDAContext.h>
 
 
-at::Tensor
+std::vector<at::Tensor>
 topk_attn_cpu_forward(
     const at::Tensor &query, 
     const at::Tensor &key,

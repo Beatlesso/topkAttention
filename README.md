@@ -38,3 +38,9 @@ Self CPU time total: 12.914ms, 但是其中cudaDeviceSynchronize 占了 82.37% �
 Self CUDA time total: 10.975ms
 
 修复了无法正确支持ch_qk和ch_v不同的情况，现已能够正常支持ch_qk和ch_v不同的情况，同时len_q和len_kv不同的情况也是支持的。
+
+
+2024/1/11：记录了中间attn矩阵（实际就是最后拷贝一下shared memory的结果，中间计算仍然使用shared memory），现在CUDA实现速度变成了13.381ms，基本相差不大，或许目前无需考虑分inference和train实现两个forward。
+
+
+2024/1/12：实现了反向传播CUDA实现，并且已经自测通过。

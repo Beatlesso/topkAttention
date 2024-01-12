@@ -2,6 +2,7 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
 
+from math import sqrt
 import time
 import torch
 import torch.nn as nn
@@ -19,20 +20,21 @@ class TopkAttnFunction(Function):
     def forward(ctx, query, key, value, pos, micro_batch):
         ctx.micro_batch = int(micro_batch)
         pos = pos.type(torch.int32)
-        output = TKA.topk_attn_forward(query, key, value, pos, ctx.micro_batch)
-        ctx.save_for_backward(query, key, value, pos)
-        return output        
+        output, attn = TKA.topk_attn_forward(query, key, value, pos, ctx.micro_batch)
+        ctx.save_for_backward(query, key, value, pos, attn)
+
+        return output     
     
 
     @staticmethod
     @once_differentiable
-    def backward(ctx, grad_output):
-        query, key, value, pos = ctx.saved_tensors
-        grad_query, grad_key, grad_value, grad_pos = \
-            TKA.topk_attn_backward(
-                query, key, value, pos, grad_output, ctx.micro_batch)
+    def backward(ctx, grad_output):      
+        query, key, value, pos, attn = ctx.saved_tensors
+        grad_output = grad_output.contiguous()
+        grad_query, grad_key, grad_value = TKA.topk_attn_backward(query, key, value, pos, attn, grad_output, ctx.micro_batch)
+        return grad_query, grad_key, grad_value, None, None
 
-        return grad_query, grad_key, grad_value, grad_pos
+
 
 
 class TopkAttnFunction_Pytorch(nn.Module):
@@ -55,8 +57,8 @@ class TopkAttnFunction_Pytorch(nn.Module):
         v = torch.gather(value, 1, pos).reshape(batch, len_q, n_head, topk, ch)
 
         query = query.unsqueeze(-2)
-        output = self.Attention(query, k, v).squeeze(-2)
-        return output
+        output, attn = self.Attention(query, k, v)
+        return output.squeeze(-2), attn.squeeze(-2)
     
 
 class ScaledDotProductAttention(nn.Module):
@@ -79,13 +81,16 @@ class ScaledDotProductAttention(nn.Module):
         attn = self.softmax(score) 
         output = torch.matmul(attn, v) 
 
-        return output
+        return output, attn
     
 
 
-class MyAttention3(Function):
-    @staticmethod
-    def forward(ctx, query, key, value, pos):
+class MyAttention3(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+
+    def forward(self, query, key, value, pos):
         batch, len_q, n_head, ch_qk = query.shape
         ch_v = value.shape[-1]
         topk = pos.shape[-1]
@@ -94,17 +99,12 @@ class MyAttention3(Function):
         key = key.unsqueeze(-2).repeat(1, 1, 1, topk, 1)
         value = value.unsqueeze(-2).repeat(1, 1, 1, topk, 1)
         pos_k = pos.unsqueeze(-1).repeat(1, 1, 1, 1, ch_qk)
-        pos_v = pos.unsqueeze(-1).repeat(1, 1, 1, 1, ch_v)
-
-        # print(key.shape)
-        # print(value.shape)
-        # print(pos_k.shape)
-        # print(pos_v.shape)
+        # pos_v = pos.unsqueeze(-1).repeat(1, 1, 1, 1, ch_v)
 
         # 这里gather同样需要 2*topk 倍的内存
         # 使用torch.gather
         k = torch.gather(key, 1, pos_k).reshape(batch, len_q, n_head, topk, ch_qk)
-        v = torch.gather(value, 1, pos_v).reshape(batch, len_q, n_head, topk, ch_v)
+        v = torch.gather(value, 1, pos_k).reshape(batch, len_q, n_head, topk, ch_v)
 
         query = query.unsqueeze(-2)
         return F.scaled_dot_product_attention(query, k, v).squeeze(-2)
@@ -123,6 +123,7 @@ class Force(Function):
 
         # 初始化输出attention结果
         output = torch.zeros(batch, len_q, n_head, ch_v, device=query.device)
+        attn = torch.zeros(batch, len_q, n_head, topk, device=query.device)
 
         # 直接计算每个query的attention
         for b in range(batch):
@@ -134,7 +135,7 @@ class Force(Function):
 
                     # 计算scaled dot product attention
                     # 注意：这里假设没有mask，且不需要额外的softmax归一化因子
-                    attn_weights = F.softmax(query[b, l, h].matmul(selected_k.transpose(-2, -1)) / sqrt(ch_qk), dim=-1)
-                    output[b, l, h] = attn_weights.matmul(selected_v)
+                    attn[b, l, h] = F.softmax(query[b, l, h].matmul(selected_k.transpose(-2, -1)) / sqrt(ch_qk), dim=-1)
+                    output[b, l, h] = attn[b, l, h].matmul(selected_v)
 
-        return output
+        return output, attn

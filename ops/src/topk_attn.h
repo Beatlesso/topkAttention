@@ -7,7 +7,7 @@
 #endif
 
 
-at::Tensor
+std::vector<at::Tensor>
 topk_attn_forward(
     const at::Tensor &query, 
     const at::Tensor &key,
@@ -27,12 +27,15 @@ topk_attn_forward(
     AT_ERROR("Not implemented on the CPU");
 }
 
+
+
 std::vector<at::Tensor>
 topk_attn_backward(
     const at::Tensor &query, 
     const at::Tensor &key,
     const at::Tensor &value,
     const at::Tensor &pos,
+    const at::Tensor &attn,
     const at::Tensor &grad_output,
     const int micro_batch)
 {
@@ -40,7 +43,7 @@ topk_attn_backward(
     {
 #ifdef WITH_CUDA
         return topk_attn_cuda_backward(
-            query, key, value, pos, grad_output, micro_batch);
+            query, key, value, pos, attn, grad_output, micro_batch);
 #else
         AT_ERROR("Not compiled with GPU support");
 #endif
